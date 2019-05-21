@@ -1,0 +1,7 @@
+
+mqtt1:
+  image: erlio/docker-vernemq
+  volumes:
+    - ./etc/vernemq:/vernemq/etc/
+  ports:
+    - 1883:1883
