@@ -66,7 +66,8 @@ main = scotty 3000 $
               Right rawjs -> 
                 case decode (LBS.fromStrict rawjs) :: Maybe Phone of
                   Just p -> do
-                    -- insert, for up add If-Match heaer : https://docs.couchdb.org/en/stable/api/document/common.html
+                    -- insert, for up add If-Match heaer :
+                    -- https://docs.couchdb.org/en/stable/api/document/common.html
                     let request
                           = setRequestMethod "PUT"
                           $ setRequestPath "/phones/00001"
