@@ -1,10 +1,15 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE DeriveGeneric #-}
 
-import GHC.Generics
-import Web.Scotty
 import Data.Aeson
 import Data.Text.Lazy as TL
+import GHC.Generics
+import Network.HTTP.Simple
+import Web.Scotty
+import qualified Data.ByteString.Base64 as B64
+import qualified Data.ByteString.Char8 as BSC
+import qualified Data.ByteString.Lazy as LBS
+
 
 import Data.Monoid (mconcat)
 
@@ -19,6 +24,16 @@ data OnPublish = OnPublish {
   , opRetain :: Bool
   } deriving (Show, Generic)
 
+data Phone = Phone {
+  phoneIMEI :: String
+  } deriving (Show, Generic)
+
+instance FromJSON Phone where
+  parseJSON = withObject "Phone" $ \v -> Phone
+    <$> v .: "imei"
+
+instance ToJSON Phone
+
 instance FromJSON OnPublish where
   parseJSON = withObject "OnPublish" $ \v -> OnPublish
         <$> v .:? "username"
@@ -28,6 +43,8 @@ instance FromJSON OnPublish where
         <*> v .: "topic"
         <*> v .: "payload"
         <*> v .: "retain"
+
+instance ToJSON OnPublish
 
 -- Just "on_publish"
 -- https://docs.vernemq.com/plugindevelopment/webhookplugins
@@ -40,7 +57,29 @@ main = scotty 3000 $
         case decode b :: Maybe OnPublish of
           Just op -> do
             liftAndCatchIO $ print op
-            text $ TL.pack $ opPayload op
+            -- put to couchdb
+            request' <- parseRequest "POST http://127.0.0.1"
+            case B64.decode (BSC.pack $ opPayload op) of
+              Left err -> do
+                liftAndCatchIO $ print err
+                text $ TL.pack err
+              Right rawjs -> 
+                case decode (LBS.fromStrict rawjs) :: Maybe Phone of
+                  Just p -> do
+                    -- insert, for up add If-Match heaer : https://docs.couchdb.org/en/stable/api/document/common.html
+                    let request
+                          = setRequestMethod "PUT"
+                          $ setRequestPath "/phones/00001"
+                          $ setRequestBodyJSON p
+                          $ setRequestPort 5984
+                          $ request'
+                    response <- httpLBS request
+                    liftAndCatchIO $ print response
+                    text $ TL.pack $ opPayload op
+                  Nothing -> do
+                    liftAndCatchIO $ print rawjs
+                    liftAndCatchIO $ print "cant decode phone"
+                    text $ TL.pack $ opPayload op                    
           Nothing -> do
             liftAndCatchIO $ print b
             text "cant decode body"
