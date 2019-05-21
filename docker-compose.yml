@@ -5,6 +5,7 @@ mqtt1:
     - ./etc/vernemq:/vernemq/etc/
   ports:
     - 1883:1883
+    - 8888:8888
 
 db:
   image: couchdb
